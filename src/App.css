@@ -1,0 +1,17 @@
+.navbar{
+  display:flex;
+  justify-content: space-around;
+  height: 100px;
+  background-color: rgb(206, 206, 107);
+  margin: 0px;
+  padding: 0px;
+}
+ul,li{
+  font-style: italic;
+  list-style: none;
+}
+ul{
+  display: flex;
+  justify-content: space-around;
+  column-gap: 30px;
+}
