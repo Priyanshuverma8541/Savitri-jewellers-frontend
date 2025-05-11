@@ -1,48 +1,62 @@
-import { RouterProvider, createBrowserRouter, redirect } from "react-router-dom";
+// App.jsx
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+} from "react-router-dom";
 import { useState, createContext, useContext, useEffect } from "react";
 import axios from "axios";
-import DefaultLayout from "./components/defaultLayout/defaultLayout";
 import Home from "./page/Home";
 import About from "./page/About";
 import Error from "./page/Error";
 import Login from "./page/Login";
 import Product from "./components/Product";
 import Registration from "./page/Registration";
-import Header from "./components/Header";
 import Navbar from "./components/Navbar";
 import Order from "./components/Order";
 import Cart from "./components/Cart";
+import Dashboard from "./components/Dashboard";
+import Profile from "./components/Profile";
+import Header from "./components/Header";
+import Slider from "./components/Slider";
+import Footer from "./components/Footer";
+import Section from "./components/Section";
+import Contact from "./components/Contact";
+import Services from "./components/Services";
+import CartProvider from "./components/CartProvider";
 
-// Create Auth Context to handle authentication globally
+// 👇 AuthContext & Provider
 const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
-// AuthProvider component to manage login and logout state
 const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
+  const isAuthenticated = !!token;
 
   useEffect(() => {
-    const token = localStorage.getItem("token"); // ✅ Ensure correct key is used
-    if (token) {
-      axios
-        .get("http://localhost:8080/api/users/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        .then((response) => {
-          setUser(response.data.user);
-          setIsAuthenticated(true);
-        })
-        .catch(() => {
-          setIsAuthenticated(false);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
-      setLoading(false);
+    const storedToken = localStorage.getItem("token");
+    const storedUser = localStorage.getItem("user");
+
+    if (storedToken && storedUser) {
+      try {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      } catch {
+        logout();
+      }
     }
+    setLoading(false);
   }, []);
 
   const login = async (email, password) => {
@@ -52,110 +66,122 @@ const AuthProvider = ({ children }) => {
         password,
       });
 
-      localStorage.setItem("token", response.data.token); // ✅ Use "token", not "authToken"
-      setUser(response.data.user);
-      setIsAuthenticated(true);
-      
+      const { token, user } = response.data;
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("userId", user._id);
 
-    } catch (error) {
-      console.error("Login failed", error);
+      setToken(token);
+      setUser(user);
+    } catch (err) {
+      throw err;
     }
-    
-  }
+  };
+
   const logout = () => {
     setUser(null);
-    setIsAuthenticated(false);
+    setToken("");
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("userId");
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+    <AuthContext.Provider value={{ token, user, isAuthenticated, login, logout }}>
       {!loading ? children : <p>Loading...</p>}
     </AuthContext.Provider>
   );
 };
 
-// ✅ Force re-render by using `key` based on `isAuthenticated`
-const DefaultLayoutWrapper = () => {
+const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  
-  useEffect(() => {
-    console.log("Auth state changed:", isAuthenticated);
-  }, [isAuthenticated]);
-
-  return (
-    <div key={isAuthenticated ? "authenticated" : "guest"}>
-      {isAuthenticated ? <Navbar /> : <Header />}
-      <DefaultLayout />
-    </div>
-  );
+  return isAuthenticated ? children : <Navigate to="/login" />;
 };
 
-// Routes Setup
-const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <DefaultLayoutWrapper />,
-    children: [
-      { index: true, element: <Home /> },
-      { path: "product", element: <Product /> },
-      { path: "about", element: <About /> },
-      {
-        path: "orders",
-        element: <Order />,
-        loader: () => {
-          if (!localStorage.getItem("token")) {
-            return redirect("/login");
-          }
-        },
-      },
-      {
-        path: "carts",
-        element: <Cart />,
-        loader: () => {
-          if (!localStorage.getItem("token")) {
-            return redirect("/login");
-          }
-        },
-      },
-      { path: "*", element: <Error /> },
-    ],
-  },
-  { path: "/login", element: <Login /> },
-  { path: "/registration", element: <Registration /> },
-]);
+const PublicLayout = () => (
+  <>
+    <Header />
+    <Outlet />
+    <Slider />
+    <Section />
+    <Footer />
+  </>
+);
 
 const App = () => {
   return (
     <AuthProvider>
-      <RouterProvider router={router} />
+      <CartProvider>
+        <Router>
+          <Routes>
+            <Route element={<PublicLayout />}>
+              <Route path="/" element={<Home />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/product" element={<Product />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/services" element={<Services />} />
+              <Route path="/error" element={<Error />} />
+              <Route path="/registration" element={<Registration />} />
+            </Route>
+
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="products" element={<Product />} />
+              <Route path="cart" element={<Cart />} />
+              <Route path="orders" element={<Order />} />
+              <Route path="profile" element={<Profile />} />
+            </Route>
+
+            <Route path="*" element={<Error />} />
+          </Routes>
+        </Router>
+      </CartProvider>
     </AuthProvider>
   );
 };
 
 export default App;
 
-
-// import { RouterProvider, createBrowserRouter, redirect } from "react-router-dom";
+// import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
 // import { useState, createContext, useContext, useEffect } from "react";
 // import axios from "axios";
-// import DefaultLayout from "./components/defaultLayout/defaultLayout";
 // import Home from "./page/Home";
 // import About from "./page/About";
 // import Error from "./page/Error";
 // import Login from "./page/Login";
 // import Product from "./components/Product";
 // import Registration from "./page/Registration";
-// import Header from "./components/Header";
 // import Navbar from "./components/Navbar";
 // import Order from "./components/Order";
 // import Cart from "./components/Cart";
+// import Dashboard from "./components/Dashboard";
+// import Profile from "./components/Profile";
+// import Header from "./components/Header";
+// import Slider from "./components/Slider";
+// import Footer from "./components/Footer";
+// import Section from "./components/Section";
+// import Contact from "./components/Contact";
+// import Services from "./components/Services";
+// import CartProvider from "./components/CartProvider";
 
-// // Create Auth Context to handle authentication globally
+// const url = "http://localhost:8080/api/carts/67f766b5132520f9c216a581";
+
+// fetch(url)
+//   .then(res => res.json())
+//   .then(data => console.log(data))
+//   .catch(err => console.error("Error fetching data:", err));
+
+
 // const AuthContext = createContext();
 // export const useAuth = () => useContext(AuthContext);
 
-// // AuthProvider component to manage login and logout state
 // const AuthProvider = ({ children }) => {
 //   const [user, setUser] = useState(null);
 //   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -174,6 +200,7 @@ export default App;
 //         })
 //         .catch(() => {
 //           setIsAuthenticated(false);
+//           localStorage.removeItem("token");
 //         })
 //         .finally(() => {
 //           setLoading(false);
@@ -190,22 +217,21 @@ export default App;
 //         password,
 //       });
 
-//       localStorage.setItem("token", response.data.token); // ✅ Store token first
+//       localStorage.setItem("token", response.data.token);
+//       localStorage.setItem("userId", response.data.user.id);
 //       setUser(response.data.user);
 //       setIsAuthenticated(true);
-
-//       // ✅ Force re-render by refreshing the page
-//       window.location.reload();
 //     } catch (error) {
-//       console.error("Login failed", error);
+//       // Throw error so Login.jsx can catch and handle
+//       throw error;
 //     }
 //   };
 
 //   const logout = () => {
 //     setUser(null);
 //     setIsAuthenticated(false);
-//     localStorage.removeItem("token"); // ✅ Clear token on logout
-//     window.location.reload(); // ✅ Ensure UI updates immediately
+//     localStorage.removeItem("token");
+//     localStorage.removeItem("userId");
 //   };
 
 //   return (
@@ -215,662 +241,58 @@ export default App;
 //   );
 // };
 
-// // ✅ Ensure DefaultLayoutWrapper updates when `isAuthenticated` changes
-// const DefaultLayoutWrapper = () => {
+// const ProtectedRoute = ({ children }) => {
 //   const { isAuthenticated } = useAuth();
-  
-//   useEffect(() => {
-//     console.log("Auth state changed:", isAuthenticated); // ✅ Debug authentication changes
-//   }, [isAuthenticated]);
-
-//   return (
-//     <>
-//       {isAuthenticated ? <Navbar /> : <Header />}
-//       <DefaultLayout />
-//     </>
-//   );
+//   return isAuthenticated ? children : <Navigate to="/login" />;
 // };
 
-// // Routes Setup: Protect routes that require authentication (like Order, Cart)
-// const router = createBrowserRouter([
-//   {
-//     path: "/",
-//     element: <DefaultLayoutWrapper />,
-//     children: [
-//       { index: true, element: <Home /> },
-//       { path: "product", element: <Product /> },
-//       { path: "about", element: <About /> },
-//       {
-//         path: "orders",
-//         element: <Order />,
-//         loader: () => {
-//           if (!localStorage.getItem("token")) {
-//             return redirect("/login");
-//           }
-//         },
-//       },
-//       {
-//         path: "carts",
-//         element: <Cart />,
-//         loader: () => {
-//           if (!localStorage.getItem("token")) {
-//             return redirect("/login");
-//           }
-//         },
-//       },
-//       { path: "*", element: <Error /> },
-//     ],
-//   },
-//   { path: "/login", element: <Login /> },
-//   { path: "/registration", element: <Registration /> },
-// ]);
+// const PublicLayout = () => (
+//   <>
+//     <Header />
+//     <Outlet />
+//     <Slider />
+//     <Section />
+//     <Footer />
+//   </>
+// );
 
-// // Main App component
 // const App = () => {
 //   return (
 //     <AuthProvider>
-//       <RouterProvider router={router} />
+//       <CartProvider>
+//         <Router>
+//           <Routes>
+//             <Route element={<PublicLayout />}>
+//               <Route path="/" element={<Home />} />
+//               <Route path="/about" element={<About />} />
+//               <Route path="/product" element={<Product />} />
+//               <Route path="/login" element={<Login />} />
+//               <Route path="/contact" element={<Contact />} />
+//               <Route path="/services" element={<Services />} />
+//               <Route path="/error" element={<Error />} />
+//               <Route path="/registration" element={<Registration />} />
+//             </Route>
+
+//             <Route
+//               path="/dashboard"
+//               element={
+//                 <ProtectedRoute>
+//                   <Dashboard />
+//                 </ProtectedRoute>
+//               }
+//             >
+//               <Route path="products" element={<Product />} />
+//               <Route path="cart" element={<Cart />} />
+//               <Route path="orders" element={<Order />} />
+//               <Route path="profile" element={<Profile />} />
+//             </Route>
+
+//             <Route path="*" element={<Error />} />
+//           </Routes>
+//         </Router>
+//       </CartProvider>
 //     </AuthProvider>
 //   );
 // };
 
 // export default App;
-
-
-// import { RouterProvider, createBrowserRouter, redirect } from "react-router-dom";
-// import { useState, createContext, useContext, useEffect } from "react";
-// import axios from "axios";
-// import DefaultLayout from "./components/defaultLayout/defaultLayout";
-// import Home from "./page/Home";
-// import About from "./page/About";
-// import Error from "./page/Error";
-// import Login from "./page/Login";
-// import Product from "./components/Product";
-// import Registration from "./page/Registration";
-// import Header from "./components/Header";
-// import Navbar from "./components/Navbar";
-// import Order from "./components/Order";
-// import Cart from "./components/Cart";
-
-
-// // Create Auth Context to handle authentication globally
-// const AuthContext = createContext();
-// export const useAuth = () => useContext(AuthContext);
-
-// // AuthProvider component to manage login and logout state
-// const AuthProvider = ({ children }) => {
-//   const [user, setUser] = useState(null);
-//   const [isAuthenticated, setIsAuthenticated] = useState(false);
-//   const [loading, setLoading] = useState(true); // Loading state for initial authentication check
-
-//   useEffect(() => {
-//     const token = localStorage.getItem("token");
-//     if (token) {
-//       axios
-//         .get("http://localhost:8080/api/users/me", {
-//           headers: { Authorization: `Bearer ${token}` },
-//         })
-//         .then((response) => {
-//           setUser(response.data.user);
-//           setIsAuthenticated(true);
-//         })
-//         .catch(() => {
-//           setIsAuthenticated(false);
-//         })
-//         .finally(() => {
-//           setLoading(false);
-//         });
-//     } else {
-//       setLoading(false);
-//     }
-//   }, []);
-
-//   const login = async (email, password) => {
-//     try {
-//       const response = await axios.post("http://localhost:8080/api/users/login", {
-//         email,
-//         password,
-//       });
-
-//       setUser(response.data.user);
-//       setIsAuthenticated(true);
-//       localStorage.setItem("token", response.data.token); // ✅ Ensure token is stored correctly
-
-//       // ✅ Force re-render to update Navbar/Header immediately
-//       window.location.reload();
-//     } catch (error) {
-//       console.error("Login failed", error);
-//     }
-//   };
-
-//   const logout = () => {
-//     setUser(null);
-//     setIsAuthenticated(false);
-//     localStorage.removeItem("token"); // ✅ Remove token from localStorage
-//     window.location.reload(); // ✅ Ensure UI updates immediately
-//   };
-
-//   return (
-//     <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
-//       {!loading ? children : <p>Loading...</p>} {/* ✅ Show loading state while checking auth */}
-//     </AuthContext.Provider>
-//   );
-// };
-
-// // Layout Wrapper that conditionally renders Navbar or Header
-// const DefaultLayoutWrapper = () => {
-//   const { isAuthenticated } = useAuth();
-  
-//   useEffect(() => {
-//     console.log("Auth state changed:", isAuthenticated); // ✅ Debug authentication changes
-//   }, [isAuthenticated]);
-
-//   return (
-//     <>
-//       {isAuthenticated ? <Navbar /> : <Header />}
-//       <DefaultLayout />
-//     </>
-//   );
-// };
-
-// // Routes Setup: Protect routes that require authentication (like Order, Cart)
-// const router = createBrowserRouter([
-//   {
-//     path: "/",
-//     element: <DefaultLayoutWrapper />,
-//     children: [
-//       { index: true, element: <Home /> },
-//       { path: "product", element: <Product /> },
-//       { path: "about", element: <About /> },
-//       {
-//         path: "orders",
-//         element: <Order />,
-//         loader: () => {
-//           if (!localStorage.getItem("token")) {
-//             return redirect("/login");
-//           }
-//         },
-//       },
-//       {
-//         path: "carts",
-//         element: <Cart />,
-//         loader: () => {
-//           if (!localStorage.getItem("token")) {
-//             return redirect("/login");
-//           }
-//         },
-//       },
-//       { path: "*", element: <Error /> },
-//     ],
-//   },
-//   { path: "/login", element: <Login /> },
-//   { path: "/registration", element: <Registration /> },
-// ]);
-
-// // Main App component
-// const App = () => {
-//   return (
-//     <AuthProvider>
-//       <RouterProvider router={router} />
-//     </AuthProvider>
-//   );
-// };
-
-// export default App;
-
-
-// import { RouterProvider, createBrowserRouter, redirect } from "react-router-dom";
-// import { useState, createContext, useContext, useEffect } from "react";
-// import axios from "axios";
-// import DefaultLayout from "./components/defaultLayout/defaultLayout";
-// import Home from "./page/Home";
-// import About from "./page/About";
-// import Error from "./page/Error";
-// import Login from "./page/Login";
-// import Product from "./components/Product";
-// import Registration from "./page/Registration";
-// import Header from "./components/Header";
-// import Navbar from "./components/Navbar";
-// import Order from "./components/Order";
-// import Cart from "./components/Cart";
-
-// // Create Auth Context to handle authentication globally
-// const AuthContext = createContext();
-// export const useAuth = () => useContext(AuthContext);
-
-// // AuthProvider component to manage login and logout state
-// const AuthProvider = ({ children }) => {
-//   const [user, setUser] = useState(null);
-//   const [isAuthenticated, setIsAuthenticated] = useState(false);
-//   const [loading, setLoading] = useState(true); // Loading state for initial authentication check
-
-//   useEffect(() => {
-//     // Check if there's a valid JWT token in localStorage and validate it
-//     const token = localStorage.getItem("token");
-//     if (token) {
-//       axios
-//         .get("http://localhost:8080/api/users/me", {
-//           headers: { Authorization: `Bearer ${token}` },
-//         })
-//         .then((response) => {
-//           setUser(response.data.user);
-//           setIsAuthenticated(true);
-//         })
-//         .catch(() => {
-//           setIsAuthenticated(false);
-//         })
-//         .finally(() => {
-//           setLoading(false);
-//         });
-//     } else {
-//       setLoading(false);
-//     }
-//   }, []);
-
-//   const login = async (email, password) => {
-//     try {
-//       const response = await axios.post("http://localhost:8080/api/users/login", {
-//         email,
-//         password,
-//       });
-
-//       setUser(response.data.user);
-//       setIsAuthenticated(true);
-//       localStorage.setItem("token", response.data.token); // Store the JWT token securely
-//     } catch (error) {
-//       console.error("Login failed", error);
-//     }
-//   };
-
-//   const logout = () => {
-//     setUser(null);
-//     setIsAuthenticated(false);
-//     localStorage.removeItem("token"); // Clear token on logout
-//   };
-
-//   return (
-//     <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
-//       {!loading ? children : <p>Loading...</p>} {/* Show loading state while checking auth */}
-//     </AuthContext.Provider>
-//   );
-// };
-
-// // Layout Wrapper that conditionally renders Navbar or Header
-// const DefaultLayoutWrapper = () => {
-//   const { isAuthenticated } = useAuth();
-//   console.log(isAuthenticated); // Debug: Check the value of `isAuthenticated`
-  
-//   return (
-//     <>
-//       {isAuthenticated ? <Navbar /> : <Header />}
-//       <DefaultLayout />
-//     </>
-//   );
-// };
-
-// // Routes Setup: Protect routes that require authentication (like Order, Cart)
-// const router = createBrowserRouter([
-//   {
-//     path: "/",
-//     element: <DefaultLayoutWrapper />,
-//     children: [
-//       { index: true, element: <Home /> },
-//       { path: "product", element: <Product /> },
-//       { path: "about", element: <About /> },
-//       {
-//         path: "orders",
-//         element: <Order />,
-//         loader: () => {
-//           // Redirect to login if the user is not authenticated
-//           if (!localStorage.getItem("token")) {
-//             return redirect("/login");
-//           }
-//         },
-//       },
-//       {
-//         path: "carts",
-//         element: <Cart />,
-//         loader: () => {
-//           // Redirect to login if the user is not authenticated
-//           if (!localStorage.getItem("token")) {
-//             return redirect("/login");
-//           }
-//         },
-//       },
-//       { path: "*", element: <Error /> },
-//     ],
-//   },
-//   { path: "/login", element: <Login /> },
-//   { path: "/registration", element: <Registration /> },
-// ]);
-
-// // Main App component
-// const App = () => {
-//   return (
-//     <AuthProvider>
-//       <RouterProvider router={router} />
-//     </AuthProvider>
-//   );
-// };
-
-// export default App;
-
-
-// import { RouterProvider, createBrowserRouter, redirect } from "react-router-dom";
-// import { useState, createContext, useContext, useEffect } from "react";
-// import axios from "axios";
-// import DefaultLayout from "./components/defaultLayout/defaultLayout";
-// import Home from "./page/Home";
-// import About from "./page/About";
-// import Error from "./page/Error";
-// import Login from "./page/Login";
-// import Product from "./components/Product";
-// import Registration from "./page/Registration";
-// import Header from "./components/Header";
-// import Navbar from "./components/Navbar";
-// import Order from "./components/Order";
-// import Cart from "./components/Cart";
-
-// // Create Auth Context to handle authentication globally
-// const AuthContext = createContext();
-// export const useAuth = () => useContext(AuthContext);
-
-// // AuthProvider component to manage login and logout state
-// const AuthProvider = ({ children }) => {
-//   const [user, setUser] = useState(null);
-//   const [isAuthenticated, setIsAuthenticated] = useState(false);
-//   const [loading, setLoading] = useState(true); // Loading state for initial authentication check
-
-//   useEffect(() => {
-//     // Check if there's a valid JWT token in localStorage and validate it
-//     const token = localStorage.getItem("token");
-//     if (token) {
-//       axios
-//         .get("http://localhost:8080/api/users/me", {
-//           headers: { Authorization: `Bearer ${token}` },
-//         })
-//         .then((response) => {
-//           setUser(response.data.user);
-//           setIsAuthenticated(true);
-//         })
-//         .catch(() => {
-//           setIsAuthenticated(false);
-//         })
-//         .finally(() => {
-//           setLoading(false);
-//         });
-//     } else {
-//       setLoading(false);
-//     }
-//   }, []);
-
-//   const login = async (email, password) => {
-//     try {
-//       const response = await axios.post("http://localhost:8080/api/users/login", {
-//         email,
-//         password,
-//       });
-
-//       setUser(response.data.user);
-//       setIsAuthenticated(true);
-//       localStorage.setItem("token", response.data.token); // Store the JWT token securely
-//     } catch (error) {
-//       console.error("Login failed", error);
-//     }
-//   };
-
-//   const logout = () => {
-//     setUser(null);
-//     setIsAuthenticated(false);
-//     localStorage.removeItem("token"); // Clear token on logout
-//   };
-
-//   return (
-//     <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
-//       {!loading ? children : <p>Loading...</p>} {/* Show loading state while checking auth */}
-//     </AuthContext.Provider>
-//   );
-// };
-
-// // Layout Wrapper that conditionally renders Navbar or Header
-// const DefaultLayoutWrapper = () => {
-//   const { isAuthenticated } = useAuth();
-//   return (
-//     <>
-//       {isAuthenticated ? <Navbar /> : <Header />}
-//       <DefaultLayout />
-//     </>
-//   );
-// };
-
-// // Routes Setup: Protect routes that require authentication (like Order, Cart)
-// const router = createBrowserRouter([
-//   {
-//     path: "/",
-//     element: <DefaultLayoutWrapper />,
-//     children: [
-//       { index: true, element: <Home /> },
-//       { path: "product", element: <Product /> },
-//       { path: "about", element: <About /> },
-//       {
-//         path: "orders",
-//         element: <Order />,
-//         loader: () => {
-//           // Redirect to login if the user is not authenticated
-//           if (!localStorage.getItem("token")) {
-//             return redirect("/login");
-//           }
-//         },
-//       },
-//       {
-//         path: "carts",
-//         element: <Cart />,
-//         loader: () => {
-//           // Redirect to login if the user is not authenticated
-//           if (!localStorage.getItem("token")) {
-//             return redirect("/login");
-//           }
-//         },
-//       },
-//       { path: "*", element: <Error /> },
-//     ],
-//   },
-//   { path: "/login", element: <Login /> },
-//   { path: "/registration", element: <Registration /> },
-// ]);
-
-// // Main App component
-// const App = () => {
-//   return (
-//     <AuthProvider>
-//       <RouterProvider router={router} />
-//     </AuthProvider>
-//   );
-// };
-
-// export default App;
-
-// import { RouterProvider, createBrowserRouter } from "react-router-dom";
-// import { useState, createContext, useContext } from "react";
-// import DefaultLayout from "./components/defaultLayout/defaultLayout";
-// import Home from "./page/Home";
-// import About from "./page/About";
-// import Error from "./page/Error";
-// import Login from "./page/Login";
-// import Product from "./components/Product";
-// import Registration from "./page/Registration";
-// import Header from "./components/Header";
-// import Navbar from "./components/Navbar";
-// import Order from "./components/Order";
-// import Cart from "./components/Cart";
-// import axios from "axios";
-
-// // Create Auth Context
-// const AuthContext = createContext();
-
-// export const useAuth = () => useContext(AuthContext);
-
-// const AuthProvider = ({ children }) => {
-//   const [user, setUser] = useState(null);
-//   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-//   const login = async (email, password) => {
-//     try {
-//       const response = await axios.post("http://localhost:8080/api/users/login", {
-//         email,
-//         password,
-//       });
-
-//       setUser(response.data.user);
-//       setIsAuthenticated(true);
-//     } catch (error) {
-//       console.error("Login failed", error);
-//     }
-//   };
-
-//   const logout = () => {
-//     setUser(null);
-//     setIsAuthenticated(false);
-//   };
-
-//   return (
-//     <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
-//       {children}
-//     </AuthContext.Provider>
-//   );
-// };
-
-// // Conditional Layout Wrapper
-// const DefaultLayoutWrapper = () => {
-//   const { isAuthenticated } = useAuth();
-//   return (
-//     <>
-//       {isAuthenticated ? <Navbar /> : <Header />}
-//       <DefaultLayout />
-//     </>
-//   );
-// };
-
-// const router = createBrowserRouter([
-//   {
-//     path: "/",
-//     element: <DefaultLayoutWrapper />,
-//     children: [
-//       { index: true, element: <Home /> },
-//       { path: "product", element: <Product /> },
-//       { path: "about", element: <About /> },
-//       { path: "orders", element: <Order /> },
-//       { path: "carts", element: <Cart /> },
-//       { path: "*", element: <Error /> },
-//     ],
-//   },
-//   { path: "/login", element: <Login /> },
-//   { path: "/registration", element: <Registration /> },
-// ]);
-
-// const App = () => {
-//   return (
-//     <AuthProvider>
-//       <RouterProvider router={router} />
-//     </AuthProvider>
-//   );
-// };
-
-// export default App;
-
-
-// import { RouterProvider, createBrowserRouter } from "react-router-dom";
-// import { useState, createContext, useContext } from "react";
-// import DefaultLayout from "./components/defaultLayout/defaultLayout";
-// import Home from "./page/Home";
-// import About from "./page/About";
-// import Error from "./page/Error";
-// import Login from "./page/Login";
-// import Product from "./components/Product";
-// import Registration from "./page/Registration";
-// import Header from "./components/Header";
-// import Navbar from "./components/Navbar";
-// import Order from "./components/Order";
-// import Cart from "./components/Cart";
-
-// // Create Auth Context
-// const AuthContext = createContext();
-
-// export const useAuth = () => useContext(AuthContext);
-
-// const AuthProvider = ({ children }) => {
-//   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-//   const login = () => setIsAuthenticated(true);
-//   const logout = () => setIsAuthenticated(false);
-
-//   return (
-//     <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
-//       {children}
-//     </AuthContext.Provider>
-//   );
-// };
-
-// // Conditional Layout Wrapper
-// const DefaultLayoutWrapper = () => {
-//   const { isAuthenticated } = useAuth();
-//   return (
-//     <>
-//       {isAuthenticated ? <Navbar /> : <Header />}
-//       <DefaultLayout />
-//     </>
-//   );
-// };
-
-// const router = createBrowserRouter([
-//   {
-//     path: "/",
-//     element: <DefaultLayoutWrapper />,
-//     children: [
-//       {
-//         index: true,
-//         element: <Home />,
-//       },
-//       {
-//         path: "product",
-//         element: <Product />,
-//       },
-//       {
-//         path: "about",
-//         element: <About />,
-//       },
-//       {
-//         path: "orders",
-//         element: <Order />,
-//       },
-//       {
-//         path: "carts",
-//         element: <Cart />,
-//       },
-//       {
-//         path: "*",
-//         element: <Error />,
-//       }
-      
-//     ],
-//   },
-//   {
-//     path: "/login",
-//     element: <Login />,
-//   },
-//   {
-//     path: "/registration",
-//     element: <Registration />,
-//   },
-// ]);
-
-// const App = () => {
-//   return (
-//     <AuthProvider>
-//       <RouterProvider router={router} />
-//     </AuthProvider>
-//   );
-// };
-
-// export default App;
-

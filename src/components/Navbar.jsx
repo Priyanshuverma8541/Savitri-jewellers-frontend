@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../App"; // Import Auth Context
 import "./header.css";
 
+
 const Navbar = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const { logout } = useAuth(); // Get logout function from context
