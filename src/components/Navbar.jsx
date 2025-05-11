@@ -47,7 +47,7 @@ const Navbar = () => {
                 </button>
 
                 <div className={`lg:flex space-x-8 ${isMenuOpen ? "block" : "hidden"} w-full lg:w-auto`}>
-                    <NavLink to="/" className="block lg:inline-block text-yellow-500 hover:text-yellow-600">
+                    {/* <NavLink to="/" className="block lg:inline-block text-yellow-500 hover:text-yellow-600">
                         Home
                     </NavLink>
                     <NavLink to="/about" className="block lg:inline-block text-yellow-500 hover:text-yellow-600">
@@ -61,7 +61,7 @@ const Navbar = () => {
                     </NavLink>
                     <NavLink to="/orders" className="block lg:inline-block text-yellow-500 hover:text-yellow-600">
                         Orders
-                    </NavLink>
+                    </NavLink> */}
                     {/* Logout Button */}
                     <button onClick={handleLogout} className="block lg:inline-block text-yellow-500 hover:text-yellow-600">
                         Logout

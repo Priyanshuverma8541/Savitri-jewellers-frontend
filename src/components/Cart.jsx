@@ -10,9 +10,55 @@ const Cart = () => {
     }, 0);
   };
 
-  const handleBuyNow = (productId) => {
-    alert(`Proceeding to buy product: ${productId}`);
-    // Here you can redirect to checkout or payment page
+  const handleBuyNow = async (productId, quantity) => {
+    const selectedItem = cartItems.find(item => item.productId._id === productId);
+    const amount = selectedItem.productId.price * quantity * 100; // in paise
+
+    try {
+      const res = await fetch("https://savitri-jewellers-backend.onrender.com/api/payment/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+
+      const data = await res.json();
+
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID, // Vite environment variable
+        amount: data.amount,
+        currency: "INR",
+        name: "Savitri Jewellers",
+        description: `Purchase - ${selectedItem.productId.name}`,
+        order_id: data.id,
+        handler: async function (response) {
+          const token = localStorage.getItem("token");
+
+          const verifyRes = await fetch("https://savitri-jewellers-backend.onrender.com/api/payment/verify", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              ...response,
+              productId,
+              quantity,
+              totalAmount: selectedItem.productId.price * quantity,
+            }),
+          });
+
+          const result = await verifyRes.json();
+          alert(result.message);
+        },
+        theme: { color: "#F37254" },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (error) {
+      console.error("Payment initiation failed", error);
+      alert("Payment failed. Please try again.");
+    }
   };
 
   return (
@@ -43,7 +89,7 @@ const Cart = () => {
 
               <div className="flex flex-col md:flex-row gap-2 mt-4 md:mt-0">
                 <button
-                  onClick={() => handleBuyNow(item.productId?._id)}
+                  onClick={() => handleBuyNow(item.productId?._id, item.quantity)}
                   className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition"
                 >
                   Buy Now
@@ -69,3 +115,4 @@ const Cart = () => {
 };
 
 export default Cart;
+

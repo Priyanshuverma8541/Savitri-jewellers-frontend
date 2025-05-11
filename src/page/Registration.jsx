@@ -17,7 +17,7 @@ const Registration = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:8080/api/users/register', {
+      const response = await axios.post('https://savitri-jewellers-backend.onrender.com/api/users/register', {
         name,
         email,
         password,
